@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <stdlib.h>
+#include <string.h>
 #include "ne.h"
 #include "router.h"
 
@@ -28,6 +28,9 @@ int UpdateRoutes(struct pkt_RT_UPDATE *RecvdUpdatePacket, int costToNbr, int myI
 
 void ConvertTabletoPkt(struct pkt_RT_UPDATE *UpdatePacketToSend, int myID)
 {
+    UpdatePacketToSend->sender_id = myID;
+    UpdatePacketToSend->no_routes = NumRoutes;
+    memcpy(UpdatePacketToSend->route, routingTable, sizeof(struct route_entry) * MAX_ROUTERS);
 }
 
 void PrintRoutes (FILE* Logfile, int myID)
