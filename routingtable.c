@@ -3,6 +3,8 @@
 #include "ne.h"
 #include "router.h"
 
+#define DEBUG 1
+
 int NumRoutes;
 struct route_entry routingTable[MAX_ROUTERS];
 
@@ -19,6 +21,11 @@ void InitRoutingTbl (struct pkt_INIT_RESPONSE *InitResponse, int myID)
         routingTable[i+1].next_hop = InitResponse->nbrcost[i].nbr;
         routingTable[i+1].cost = InitResponse->nbrcost[i].cost;
     }    
+#if DEBUG
+    for (i = 0; i < MAX_ROUTERS; i++)
+        printf("%s: dest_id = %d, next_hop = %d, cost = %d\n", \
+                __func__, routingTable[i].dest_id, routingTable[i].next_hop, routingTable[i].cost);
+#endif
 }
 
 int UpdateRoutes(struct pkt_RT_UPDATE *RecvdUpdatePacket, int costToNbr, int myID)  // dest = myID, dest not exist, split horizon rule, force update, find a longer path, find a shorter path
