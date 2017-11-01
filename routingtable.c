@@ -5,6 +5,8 @@
 
 #define DEBUG 1
 
+int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int sender_id);
+
 int NumRoutes;
 struct route_entry routingTable[MAX_ROUTERS];
 
@@ -30,30 +32,45 @@ void InitRoutingTbl (struct pkt_INIT_RESPONSE *InitResponse, int myID)
 
 int UpdateRoutes(struct pkt_RT_UPDATE *RecvdUpdatePacket, int costToNbr, int myID)  // dest = myID, dest not exist, split horizon rule, force update, find a longer path, find a shorter path
 {
-	int i,j;
-	int next_cost = 0;
-	for (i = 0; i < NumRoutes; i++) {
-		if (RecvdUpdatePacket->dest_id == routingTable[i].dest_id) break;
+	int i;
+	int change_num = 0;
+
+	if (RecvdUpdatePacket->dest_id != myID) return 0;
+
+	for (i = 0; i < RecvdUpdatePacket->no_routes; i++) {
+		change_num = change_num || _SubroutesUpdate(RecvdUpdatePacket->route[i], costToNbr, myID, RecvdUpdatePacket->sender_id);
 	}
+
+    return change_num;
+}
+
+int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int sender_id)  // dest = myID, dest not exist, split horizon rule, force update, find a longer path, find a shorter path
+{
+	int i;
+	int next_cost = route.cost;
+
+	for (i = 0; i < NumRoutes; i++) {
+		if (route.dest_id == routingTable[i].dest_id) {
+			//printf("\nRdest: %d, local dest id: %d\n", route.dest_id, routingTable[i].dest_id);
+			break;
+		}
+	}
+
+	//printf("\ni: %d\n", i);
+
 	if (i == 0) return 0;  // dest = myID ( this is the dest )
 
-	for (j = 0; j < RecvdUpdatePacket->no_routes; j++) {
-		if (RecvdUpdatePacket->dest_id == RecvdUpdatePacket->route[j].dest_id) break;
-	}
-	
-	next_cost = RecvdUpdatePacket->route[j].cost;
-
 	if (i == NumRoutes) {  // dest not exist ( new dest )
-		routingTable[NumRoutes].dest_id = RecvdUpdatePacket->dest_id;
-		routingTable[NumRoutes].next_hop = RecvdUpdatePacket->sender_id;
+		routingTable[NumRoutes].dest_id = route.dest_id;
+		routingTable[NumRoutes].next_hop = sender_id;
 		routingTable[NumRoutes].cost = next_cost+costToNbr;
 		NumRoutes++;
 		return 1;
 	}
 
-	if (RecvdUpdatePacket->route[j].next_hop == myID) return 0;  // split horizon rule ( avoid infinite loop )
+	if (route.next_hop == myID) return 0;  // split horizon rule ( avoid infinite loop )
 
-	if (routingTable[i].next_hop == RecvdUpdatePacket->sender_id) {  // forced update
+	if (routingTable[i].next_hop == sender_id) {  // forced update
 		if (routingTable[i].cost == next_cost + costToNbr) return 0;  // unchanged
 		else {
 			routingTable[i].cost = next_cost + costToNbr;
@@ -64,7 +81,7 @@ int UpdateRoutes(struct pkt_RT_UPDATE *RecvdUpdatePacket, int costToNbr, int myI
 	if (routingTable[i].cost <= next_cost + costToNbr) return 0; // find a longer path
 	
 	// find a shorter path
-	routingTable[i].next_hop = RecvdUpdatePacket->sender_id;
+	routingTable[i].next_hop = sender_id;
 	routingTable[i].cost = next_cost + costToNbr;
 
     return 1;
