@@ -97,11 +97,11 @@ void ConvertTabletoPkt(struct pkt_RT_UPDATE *UpdatePacketToSend, int myID)
 void PrintRoutes (FILE* Logfile, int myID)
 {
 	int i = 0;
-	fprintf("\nRouting Table:");
+	fprintf(Logfile, "\nRouting Table:");
 	for (i = 0; i < NumRoutes; i++) {
-		fprintf("\nR%d -> R%d: R%d, %d", myID, routingTable[i].dest_id, routingTable[i].next_hop, routingTable[i].cost);
+		fprintf(Logfile, "\nR%d -> R%d: R%d, %d", myID, routingTable[i].dest_id, routingTable[i].next_hop, routingTable[i].cost);
 	}
-	fprintf("\n");
+	fprintf(Logfile, "\n");
 }
 
 void UninstallRoutesOnNbrDeath(int DeadNbr)
