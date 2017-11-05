@@ -13,18 +13,19 @@
 
 int router_setup(int);
 int ne_conn (char*, int, struct sockaddr_in *);
+int init_table(int, char*, struct sockaddr*, int, int);
 
 int main (int argc, char **argv)
 {
     struct sockaddr_in neinfo = {0};
     int neport, routerport, routerid;
     int routerfd, nefd;
+    int result;
     int nelen = sizeof(neinfo);
     char buf[PACKETSIZE];
-    struct pkt_INIT_REQUEST initpkg;
 
     if (argc != 5) {
-        printf("Usage: router <router id> <ne hostname> \
+        perror("Usage: router <router id> <ne hostname> \
                 <ne UDP port> <router UDP port>\n"); 
         return -1;
     }
@@ -37,23 +38,53 @@ int main (int argc, char **argv)
     /* setup Network Emulator socket */
     nefd = ne_conn(argv[2], neport, &neinfo);
     if (nefd < 0) {
-        printf("failed to connect to Network Emulator\n");
+        perror("failed to connect to Network Emulator\n");
         return nefd;
     }
 
     /* setup router socket */
     routerfd = router_setup(routerport);
     if (routerfd < 0) {
-        printf("router socket failed to setup\n");
+        perror("router socket failed to setup\n");
         return routerfd;
     }
 
     /* Initialize the routing rable */
-    initpkg.router_id = routerid;
-    
+    result = init_table(routerid, buf, (struct sockaddr*)&neinfo, nelen, nefd);
+    if (result < 0) {
+        perror("router initialization failed\n");
+        return -1;
+    }
 
     return 0;
 }
+
+int init_table(int routerid, char* buf, struct sockaddr* neinfo, int len, int fd)
+{
+    int num;
+    struct pkt_INIT_REQUEST initpkg;
+
+    initpkg.router_id = htonl(routerid);
+    memcpy(buf, &initpkg, sizeof(struct pkt_INIT_REQUEST));
+    /* send */
+    num = sendto(fd, buf, sizeof(struct pkt_INIT_REQUEST), 0, neinfo, len);
+    if (num < 0) {
+        perror("failed to send initialization request\n");   
+        return -1;
+    }
+    /* receive */
+    num = recvfrom(fd, buf, PACKETSIZE, 0, neinfo, (socklen_t *)&len);
+    if (num < 0) {
+        perror("failed to receive initialization request\n");   
+        return -1;
+    }
+    /* establish table */
+    ntoh_pkt_INIT_RESPONSE((struct pkt_INIT_RESPONSE *)buf);
+    InitRoutingTbl((struct pkt_INIT_RESPONSE *)buf, routerid);
+
+    return 0;
+}
+
 
 int router_setup(int port)
 {
