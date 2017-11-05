@@ -3,7 +3,7 @@
 #include "ne.h"
 #include "router.h"
 
-#define DEBUG 1
+#define DBG 1
 
 int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int sender_id);
 
@@ -23,7 +23,7 @@ void InitRoutingTbl (struct pkt_INIT_RESPONSE *InitResponse, int myID)
         routingTable[i+1].next_hop = InitResponse->nbrcost[i].nbr;
         routingTable[i+1].cost = InitResponse->nbrcost[i].cost;
     }    
-#if DEBUG
+#if DBG
     for (i = 0; i < MAX_ROUTERS; i++)
         printf("%s: dest_id = %d, next_hop = %d, cost = %d\n", \
                 __func__, routingTable[i].dest_id, routingTable[i].next_hop, routingTable[i].cost);
