@@ -56,7 +56,8 @@ int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int send
 		}
 	}
 
-	//printf("\ni: %d\n", i);
+	printf("\ni: %d\n", i);
+	printf("cost: %d, costToNbr: %d\n", next_cost, costToNbr);
 
 	if (i == 0) return 0;  // dest = myID ( this is the dest )
 
@@ -98,10 +99,14 @@ void PrintRoutes (FILE* Logfile, int myID)
 {
 	int i = 0;
 	fprintf(Logfile, "\nRouting Table:");
+	printf("\nRouting Table:");
 	for (i = 0; i < NumRoutes; i++) {
 		fprintf(Logfile, "\nR%d -> R%d: R%d, %d", myID, routingTable[i].dest_id, routingTable[i].next_hop, routingTable[i].cost);
+		printf("\nR%d -> R%d: R%d, %d", myID, routingTable[i].dest_id, routingTable[i].next_hop, routingTable[i].cost);
 	}
 	fprintf(Logfile, "\n");
+	printf("\n");
+	fflush(Logfile);
 }
 
 void UninstallRoutesOnNbrDeath(int DeadNbr)
