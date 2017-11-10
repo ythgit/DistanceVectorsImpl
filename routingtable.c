@@ -3,7 +3,7 @@
 #include "ne.h"
 #include "router.h"
 
-#define DBG 1
+#define DBG 0
 
 int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int sender_id);
 
@@ -56,8 +56,10 @@ int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int send
 		}
 	}
 
+#if DBG
 	printf("\ni: %d\n", i);
 	printf("cost: %d, costToNbr: %d\n", next_cost, costToNbr);
+#endif
 
 	if (i == 0) return 0;  // dest = myID ( this is the dest )
 
@@ -65,6 +67,7 @@ int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int send
 		routingTable[NumRoutes].dest_id = route.dest_id;
 		routingTable[NumRoutes].next_hop = sender_id;
 		routingTable[NumRoutes].cost = next_cost+costToNbr;
+		if (routingTable[NumRoutes].cost > INFINITY) routingTable[NumRoutes].cost = INFINITY;
 		NumRoutes++;
 		return 1;
 	}
@@ -75,6 +78,7 @@ int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int send
 		if (routingTable[i].cost == next_cost + costToNbr) return 0;  // unchanged
 		else {
 			routingTable[i].cost = next_cost + costToNbr;
+			if (routingTable[i].cost > INFINITY) routingTable[i].cost = INFINITY;
 			return 1;
 		}
 	}
@@ -84,7 +88,7 @@ int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int send
 	// find a shorter path
 	routingTable[i].next_hop = sender_id;
 	routingTable[i].cost = next_cost + costToNbr;
-
+	if (routingTable[NumRoutes].cost > INFINITY) routingTable[NumRoutes].cost = INFINITY;
     return 1;
 }
 
@@ -99,13 +103,19 @@ void PrintRoutes (FILE* Logfile, int myID)
 {
 	int i = 0;
 	fprintf(Logfile, "\nRouting Table:");
+#if DBG
 	printf("\nRouting Table:");
+#endif
 	for (i = 0; i < NumRoutes; i++) {
 		fprintf(Logfile, "\nR%d -> R%d: R%d, %d", myID, routingTable[i].dest_id, routingTable[i].next_hop, routingTable[i].cost);
+#if DBG
 		printf("\nR%d -> R%d: R%d, %d", myID, routingTable[i].dest_id, routingTable[i].next_hop, routingTable[i].cost);
+#endif
 	}
 	fprintf(Logfile, "\n");
+#if DBG
 	printf("\n");
+#endif
 	fflush(Logfile);
 }
 

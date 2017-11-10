@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -13,10 +14,11 @@
 #include "ne.h"
 #include "router.h"
 
-#define RETRY 10
 #define DBG 1
-#define NOT_UNIT_TEST 1
 #define for_each_router(lp, pkt) for(lp = 0; lp < pkt.no_routes; lp++)
+#define for_each_nbr(lp, no_nbr) for(lp = 0; lp < no_nbr; lp++)
+#define nbr_timeout(lp) nbr.nbrcost[lp].cost
+#define nbr_num(lp) nbr.nbrcost[lp].nbr
 #define pkt_print(lp, pkt) \
 					do { \
 						printf("pkt sender_id = %d\n", pkt.sender_id); \
@@ -42,10 +44,12 @@ int main (int argc, char **argv)
     char buf[PACKETSIZE];
     fd_set read_fds;
     /* timer variables */
-    struct timeval timeout = {0}, from, to, start;
+    struct timeval timeout = {0}, start, end = {0}, intval;
+    int timer = 0;
+    int converge = CONVERGE_TIMEOUT;
     /* packet variables */
-	int no_nbr = 0;
     struct pkt_RT_UPDATE pkt, rcvpkt;
+    struct pkt_INIT_RESPONSE nbr;
     char * filename;
     FILE * logptr;
 
@@ -71,22 +75,17 @@ int main (int argc, char **argv)
 
     /* setup router socket */
     routerfd = router_setup(routerport);
+#if DBG
+    printf("router fd = %d\n", routerfd);
+#endif
     if (routerfd < 0) {
         perror("router socket failed to setup\n");
         return routerfd;
     }
-#if DBG
-    printf("router fd = %d\n", routerfd);
-#endif
 
     /* Initialize the routing rable */
-#if NOT_UNIT_TEST
-    no_nbr = init_table(routerid, buf, (struct sockaddr*)&neinfo, nelen, nefd);
-    if (no_nbr < 0) {
-        perror("router initialization failed\n");
-        return -1;
-    }
-#endif
+    init_table(routerid, buf, (struct sockaddr*)&neinfo, nelen, nefd);
+    memcpy(&nbr, &buf, sizeof(struct pkt_INIT_RESPONSE));
 
     /* Initialize the log fd */ 
     filename = (char *)malloc(sizeof(char) * (11 + strlen(argv[1])));
@@ -105,39 +104,60 @@ int main (int argc, char **argv)
         return -1;
     }
 
-    /* Initialize timer */
-    result = gettimeofday(&start, NULL);
-    if (logptr == NULL) {
-        perror("failed to get time stamp\n");
-        goto failed;
+    /* failure detection init */
+    for_each_nbr(i, nbr.no_nbr) {
+        nbr_timeout(i) = FAILURE_DETECTION;
     }
 
+    /* main loop */
     PrintRoutes(logptr, routerid);
     FD_ZERO(&read_fds);
     while(1) {
+        gettimeofday(&start, NULL);
+        if (timeout.tv_sec < 0) {
+            timeout.tv_sec = 0;
+            timeout.tv_usec = 0;
+        }
         FD_SET(nefd, &read_fds);
-        timeout.tv_sec = UPDATE_INTERVAL;
         result = select(FD_SETSIZE, &read_fds, NULL, NULL, &timeout);
         if(result < 0) {
             perror("select set less than 0\n");
             goto failed;
         } else if (result == 0) {
-            bzero(&pkt, sizeof(struct pkt_RT_UPDATE));
+            /* handling timer variable */
+            timeout.tv_sec = UPDATE_INTERVAL;
+            timer++;
+
+            /* flood packet to neighbor */
             ConvertTabletoPkt(&pkt, routerid);
-            for (i = 1; i <= no_nbr; i++) {
-                if (pkt.route[i].dest_id == pkt.route[i].next_hop 
-                       && pkt.route[i].dest_id != routerid) {
-                    pkt.dest_id = pkt.route[i].dest_id;
-					printf("A Packet is sent to R%d\n", pkt.route[i].dest_id);
-					memcpy(&buf, &pkt, sizeof(struct pkt_RT_UPDATE));
-                    hton_pkt_RT_UPDATE((struct pkt_RT_UPDATE *)&buf);
-                    sendto(nefd, (const void*)&buf, sizeof(struct pkt_RT_UPDATE), 
-                            0 ,(struct sockaddr*)&neinfo, nelen);
+            for_each_nbr(i, nbr.no_nbr) {
+                pkt.dest_id = nbr_num(i);
+#if DBG
+		        printf("Packet is sent to R%d\n", nbr_num(i));
+#endif
+		        memcpy(&buf, &pkt, sizeof(struct pkt_RT_UPDATE));
+                hton_pkt_RT_UPDATE((struct pkt_RT_UPDATE *)&buf);
+                sendto(nefd, (const void*)&buf, sizeof(struct pkt_RT_UPDATE), 0 ,(struct sockaddr*)&neinfo, nelen);
+            }       
+            /* check if neighbor is dead */
+            for_each_nbr(i, nbr.no_nbr) {
+                if (nbr_timeout(i) > 0)
+                    nbr_timeout(i)--;
+                if (!nbr_timeout(i)) {
+                    UninstallRoutesOnNbrDeath(nbr_num(i));
+                    printf("Neighbor R%d is dead or link to it is down\n", nbr_num(i));
+                    PrintRoutes(logptr, routerid);
                 }
             }
+            /* check if converged */
+            if (!converge) {
+                    converge = -1;
+                    printf("%d:Converged\n", timer);
+                    fprintf(logptr, "%d:Converged\n", timer);
+					fflush(logptr);
+            }
         } else if (FD_ISSET(nefd, &read_fds)) {
-            result = recvfrom(nefd, &buf, PACKETSIZE, 0, 
-                    (struct sockaddr*)&neinfo, (socklen_t *)&nelen);
+            result = recvfrom(nefd, &buf, PACKETSIZE, 0, (struct sockaddr*)&neinfo, (socklen_t *)&nelen);
             if (result <= 0) {
                 perror("failed to receive packet\n");   
 				continue;
@@ -145,37 +165,43 @@ int main (int argc, char **argv)
             memcpy(&rcvpkt, &buf, sizeof(struct pkt_RT_UPDATE));
             ntoh_pkt_RT_UPDATE(&rcvpkt);
 			printf("A Packet is received from R%d\n", rcvpkt.sender_id);
+
+            /* update time stamp of sender for failure detection */
+            for_each_nbr(i, nbr.no_nbr) {
+                if (nbr_num(i) == rcvpkt.sender_id)
+                    nbr_timeout(i) = FAILURE_DETECTION;
 #if DBG
-			pkt_print(i, rcvpkt);
+                printf("nbr %d has timeout %d\n", nbr_num(i), nbr_timeout(i));
 #endif
+            }
+
+            /* update route table entry */
             for_each_router(i, rcvpkt) {
                 if (routerid == rcvpkt.route[i].dest_id) {
-#if DBG
-					printf("cost = %d\n", rcvpkt.route[i].cost);
-#endif
-                    result = UpdateRoutes(&rcvpkt, rcvpkt.route[i].cost, routerid);
-                    if (result) {
+                    if (UpdateRoutes(&rcvpkt, rcvpkt.route[i].cost, routerid)) {
+                        converge = CONVERGE_TIMEOUT;
                         PrintRoutes(logptr, routerid);
-                        i = 0;
-retry:
-                        result = gettimeofday(&from, NULL);
-                        if (result == -1 && i++ < RETRY) {
-                            goto retry;
-                        } else if (result == -1 && i == RETRY) {
-                            perror("failed to get time of day\n");
-                            goto failed;
-                        }
                     } else {
-                        result = gettimeofday(&to, NULL);
-                        if (to.tv_sec - from.tv_sec >= CONVERGE_TIMEOUT) {
-                            fprintf(logptr, "%d:Converged\n", (int)(to.tv_sec - start.tv_sec));
-							fflush(logptr);
-                        }
+                        if (converge > 0) 
+                            converge--;
                     }
                     break;
                 }
             }
+#if DBG
+            printf("converge timeout = %d\n", converge);
+#endif
         }
+        gettimeofday(&end, NULL);
+        /* calculate time of program execution */
+        timersub(&end, &start, &intval);
+        timersub(&timeout, &intval, &timeout);
+#if 0
+        printf("timeout sec = %ld, usec = %ld\n", timeout.tv_sec, timeout.tv_usec);
+        printf("intval sec = %ld, usec = %ld\n", intval.tv_sec, intval.tv_usec);
+        printf("start sec = %ld, usec = %ld\n", start.tv_sec, start.tv_usec);
+        printf("end sec = %ld, usec = %ld\n", end.tv_sec, end.tv_usec);
+#endif
     }
     free(filename);
     fclose(logptr);
