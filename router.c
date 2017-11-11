@@ -47,9 +47,10 @@ int main (int argc, char **argv)
     struct timeval timeout = {0}, start, end = {0}, intval;
     int timer = 0;
     int converge = CONVERGE_TIMEOUT;
+    int nbr_tv[MAX_ROUTERS] = {0};
     /* packet variables */
     struct pkt_RT_UPDATE pkt, rcvpkt;
-    struct pkt_INIT_RESPONSE nbr, nbrbkp;
+    struct pkt_INIT_RESPONSE nbr;
     char * filename;
     FILE * logptr;
 
@@ -86,7 +87,6 @@ int main (int argc, char **argv)
     /* Initialize the routing rable */
     init_table(routerid, buf, (struct sockaddr*)&neinfo, nelen, nefd);
     memcpy(&nbr, &buf, sizeof(struct pkt_INIT_RESPONSE));
-    memcpy(&nbrbkp, &nbr, sizeof(struct pkt_INIT_RESPONSE));
 
     /* Initialize the log fd */ 
     filename = (char *)malloc(sizeof(char) * (11 + strlen(argv[1])));
@@ -107,7 +107,7 @@ int main (int argc, char **argv)
 
     /* failure detection init */
     for_each_nbr(i, nbr.no_nbr) {
-        nbr_timeout(i) = FAILURE_DETECTION;
+        nbr_tv[i] = FAILURE_DETECTION;
     }
 
     /* main loop */
@@ -142,9 +142,10 @@ int main (int argc, char **argv)
             }       
             /* check if neighbor is dead */
             for_each_nbr(i, nbr.no_nbr) {
-                if (nbr_timeout(i) > 0)
-                    nbr_timeout(i)--;
-                if (!nbr_timeout(i)) {
+                if (nbr_tv[i] > 0)
+                    nbr_tv[i]--;
+                if (nbr_tv[i] == 0) {
+                    nbr_tv[i]--;
                     UninstallRoutesOnNbrDeath(nbr_num(i));
                     printf("Neighbor R%d is dead or link to it is down\n", nbr_num(i));
                     PrintRoutes(logptr, routerid);
@@ -174,16 +175,16 @@ int main (int argc, char **argv)
             /* update time stamp of sender for failure detection */
             for_each_nbr(i, nbr.no_nbr) {
                 if (nbr_num(i) == rcvpkt.sender_id)
-                    nbr_timeout(i) = FAILURE_DETECTION;
+                    nbr_tv[i] = FAILURE_DETECTION;
 #if DBG
-                printf("nbr %d has timeout %d\n", nbr_num(i), nbr_timeout(i));
+                printf("nbr %d has timeout %d\n", nbr_num(i), nbr_tv[i]);
 #endif
             }
 
             /* update route table entry */
-            for_each_nbr(i, nbrbkp.no_nbr) {
-                if (nbrbkp.nbrcost[i].nbr == rcvpkt.sender_id) {
-                    if (UpdateRoutes(&rcvpkt, nbrbkp.nbrcost[i].cost, routerid)) {
+            for_each_nbr(i, nbr.no_nbr) {
+                if (nbr.nbrcost[i].nbr == rcvpkt.sender_id) {
+                    if (UpdateRoutes(&rcvpkt, nbr.nbrcost[i].cost, routerid)) {
                         converge = CONVERGE_TIMEOUT;
                         PrintRoutes(logptr, routerid);
                     }
