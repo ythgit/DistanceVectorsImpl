@@ -3,7 +3,7 @@
 #include "ne.h"
 #include "router.h"
 
-#define DBG 0
+#define DBG 1
 
 int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int sender_id);
 
@@ -58,6 +58,7 @@ int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int send
 
 #if DBG
 	printf("\ni: %d\n", i);
+	printf("NbrID: %d\n", sender_id);
 	printf("cost: %d, costToNbr: %d\n", next_cost, costToNbr);
 #endif
 
