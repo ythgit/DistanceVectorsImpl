@@ -4,6 +4,7 @@
 #include "router.h"
 
 #define DBG 1
+#define DBG1 1
 
 int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int sender_id);
 
@@ -38,7 +39,10 @@ int UpdateRoutes(struct pkt_RT_UPDATE *RecvdUpdatePacket, int costToNbr, int myI
 	if (RecvdUpdatePacket->dest_id != myID) return 0;
 
 	for (i = 0; i < RecvdUpdatePacket->no_routes; i++) {
-		change_num = change_num || _SubroutesUpdate(RecvdUpdatePacket->route[i], costToNbr, myID, RecvdUpdatePacket->sender_id);
+#if DBG1
+	  printf("Num of routes: %d\n", RecvdUpdatePacket->no_routes);
+#endif
+		change_num =  _SubroutesUpdate(RecvdUpdatePacket->route[i], costToNbr, myID, RecvdUpdatePacket->sender_id) || change_num;
 	}
 
     return change_num;
@@ -70,6 +74,10 @@ int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int send
 		routingTable[NumRoutes].cost = next_cost+costToNbr;
 		if (routingTable[NumRoutes].cost > INFINITY) routingTable[NumRoutes].cost = INFINITY;
 		NumRoutes++;
+#if DBG1
+	printf("\ni: %d\n", i);
+	printf("cost: %d, costToNbr: %d\n", next_cost, costToNbr);
+#endif
 		return 1;
 	}
 
@@ -80,6 +88,10 @@ int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int send
 		else {
 			routingTable[i].cost = next_cost + costToNbr;
 			if (routingTable[i].cost > INFINITY) routingTable[i].cost = INFINITY;
+#if DBG1
+	printf("\ni: %d\n", i);
+	printf("cost: %d, costToNbr: %d\n", next_cost, costToNbr);
+#endif
 			return 1;
 		}
 	}
@@ -90,6 +102,10 @@ int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int send
 	routingTable[i].next_hop = sender_id;
 	routingTable[i].cost = next_cost + costToNbr;
 	if (routingTable[NumRoutes].cost > INFINITY) routingTable[NumRoutes].cost = INFINITY;
+#if DBG1
+	printf("\ni: %d\n", i);
+	printf("cost: %d, costToNbr: %d\n", next_cost, costToNbr);
+#endif
     return 1;
 }
 
