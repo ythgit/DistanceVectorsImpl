@@ -49,7 +49,7 @@ int main (int argc, char **argv)
     int converge = CONVERGE_TIMEOUT;
     /* packet variables */
     struct pkt_RT_UPDATE pkt, rcvpkt;
-    struct pkt_INIT_RESPONSE nbr;
+    struct pkt_INIT_RESPONSE nbr, nbrbkp;
     char * filename;
     FILE * logptr;
 
@@ -86,6 +86,7 @@ int main (int argc, char **argv)
     /* Initialize the routing rable */
     init_table(routerid, buf, (struct sockaddr*)&neinfo, nelen, nefd);
     memcpy(&nbr, &buf, sizeof(struct pkt_INIT_RESPONSE));
+    memcpy(&nbrbkp, &nbr, sizeof(struct pkt_INIT_RESPONSE));
 
     /* Initialize the log fd */ 
     filename = (char *)malloc(sizeof(char) * (11 + strlen(argv[1])));
@@ -151,11 +152,15 @@ int main (int argc, char **argv)
             }
             /* check if converged */
             if (!converge) {
-                    converge = -1;
-                    printf("%d:Converged\n", timer);
-                    fprintf(logptr, "%d:Converged\n", timer);
-					fflush(logptr);
+                converge = -1;
+                printf("%d:Converged\n", timer);
+                fprintf(logptr, "%d:Converged\n", timer);
+			    fflush(logptr);
             }
+            /* convered timeout counter */
+            if (converge > 0) 
+                converge--;
+
         } else if (FD_ISSET(nefd, &read_fds)) {
             result = recvfrom(nefd, &buf, PACKETSIZE, 0, (struct sockaddr*)&neinfo, (socklen_t *)&nelen);
             if (result <= 0) {
@@ -176,14 +181,11 @@ int main (int argc, char **argv)
             }
 
             /* update route table entry */
-            for_each_router(i, rcvpkt) {
-                if (routerid == rcvpkt.route[i].dest_id) {
-                    if (UpdateRoutes(&rcvpkt, rcvpkt.route[i].cost, routerid)) {
+            for_each_nbr(i, nbrbkp.no_nbr) {
+                if (nbrbkp.nbrcost[i].nbr == rcvpkt.sender_id) {
+                    if (UpdateRoutes(&rcvpkt, nbrbkp.nbrcost[i].cost, routerid)) {
                         converge = CONVERGE_TIMEOUT;
                         PrintRoutes(logptr, routerid);
-                    } else {
-                        if (converge > 0) 
-                            converge--;
                     }
                     break;
                 }
