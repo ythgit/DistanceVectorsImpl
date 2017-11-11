@@ -122,7 +122,7 @@ void PrintRoutes (FILE* Logfile, int myID)
 void UninstallRoutesOnNbrDeath(int DeadNbr)
 {
 	int i = 0;
-	for (i = 0; i < NumRoutes; i++) {
-		if (routingTable[i].next_hop == DeadNbr) routingTable[i].cost = INFINITY;
+	for (i = 0; i < NumRoutes; i++) {  // next_hop == DeadNbr to find the deadnbr. cost != 0 to avoid itself
+		if (routingTable[i].next_hop == DeadNbr && routingTable[i].cost != 0) routingTable[i].cost = INFINITY;
 	}
 }
