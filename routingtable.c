@@ -3,8 +3,8 @@
 #include "ne.h"
 #include "router.h"
 
-#define DBG 1
-#define DBG1 1
+#define DBG 0
+#define DBG1 0
 
 int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int sender_id);
 

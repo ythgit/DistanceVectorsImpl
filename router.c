@@ -14,10 +14,9 @@
 #include "ne.h"
 #include "router.h"
 
-#define DBG 1
+#define DBG 0
 #define for_each_router(lp, pkt) for(lp = 0; lp < pkt.no_routes; lp++)
 #define for_each_nbr(lp, no_nbr) for(lp = 0; lp < no_nbr; lp++)
-#define nbr_timeout(lp) nbr.nbrcost[lp].cost
 #define nbr_num(lp) nbr.nbrcost[lp].nbr
 #define pkt_print(lp, pkt) \
 					do { \
