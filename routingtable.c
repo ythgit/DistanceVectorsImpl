@@ -85,6 +85,7 @@ int _SubroutesUpdate(struct route_entry route, int costToNbr, int myID, int send
 
 	if (routingTable[i].next_hop == sender_id) {  // forced update
 		if (routingTable[i].cost == next_cost + costToNbr) return 0;  // unchanged
+		else if (routingTable[i].cost >= INFINITY && (next_cost + costToNbr) >= INFINITY) return 0;
 		else {
 			routingTable[i].cost = next_cost + costToNbr;
 			if (routingTable[i].cost > INFINITY) routingTable[i].cost = INFINITY;
